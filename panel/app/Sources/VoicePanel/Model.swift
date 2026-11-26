@@ -163,8 +163,10 @@ final class PanelModel: ObservableObject {
         case "error":
             add(.system, "Error: \(e["message"] as? String ?? "?")")
             thinking = false
+        case "log":
+            PanelLog.write("[brain] \(e["text"] as? String ?? "")")
         default:
-            break
+            PanelLog.write("[brain event] \(e)")
         }
     }
 
@@ -246,6 +248,7 @@ final class PanelModel: ObservableObject {
     }
 
     func add(_ role: Entry.Role, _ text: String) {
+        PanelLog.write("[\(role)] \(text)")
         entries.append(Entry(role: role, text: text))
         if entries.count > 300 { entries.removeFirst(entries.count - 300) }
     }

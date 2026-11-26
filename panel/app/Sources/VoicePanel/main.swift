@@ -15,6 +15,7 @@ final class FloatingPanel: NSPanel {
     // call super (that recursed until the stack overflowed). The close button calls close() directly.
     override func performClose(_ sender: Any?) {}
     override func close() {
+        PanelLog.write("window close() requested (close button: \(closeButtonClicked))")
         guard closeButtonClicked else { return }
         super.close()
     }
@@ -35,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
+        PanelLog.open(session: config.session)
+        PanelLog.write("=== launch pid \(getpid()) session \(config.session) cwd \(config.cwd)")
         model = PanelModel(config: config)
 
         panel = FloatingPanel(
@@ -105,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func closeButtonClicked() {
         panel.closeButtonClicked = true
         panel.close()
+        NSApp.terminate(nil)   // the close button is the only way out
     }
 
     func toggleVisible() { panel.isVisible ? panel.orderOut(nil) : show() }
@@ -148,9 +152,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.setFrame(f, display: true, animate: false)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    // Never quit because AppKit thinks the last window closed: it decided that 0.3 s after launch
+    // (some transient window closing) while the panel was still on screen. The close button quits.
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ note: Notification) {
+        PanelLog.writeNow("=== terminating. Call stack:\n" + Thread.callStackSymbols.prefix(25).joined(separator: "\n"))
         model?.shutdown()
         if let pidFile { try? FileManager.default.removeItem(atPath: pidFile) }
     }

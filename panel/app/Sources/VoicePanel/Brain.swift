@@ -25,7 +25,7 @@ final class Brain {
         process.environment = env
         process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
-        process.standardError = FileHandle(forWritingAtPath: "/dev/null")
+        process.standardError = PanelLog.appendHandle() ?? FileHandle(forWritingAtPath: "/dev/null")
     }
 
     func start() throws {
