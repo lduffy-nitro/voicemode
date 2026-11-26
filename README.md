@@ -6,6 +6,15 @@
 from the people who brought you VoiceMode. A voice, a phone line and mail for
 your Claude Code sessions. Works on macOS; preliminary testing on Linux.
 
+> **This fork adds a floating voice panel for Claude Code (macOS).** Set up everything,
+> including VoiceMode itself, with:
+>
+> ```bash
+> git clone https://github.com/lduffy-nitro/voicemode ~/src/voicemode && ~/src/voicemode/panel/install.sh
+> ```
+>
+> then type `/voice` in any Claude Code session. Details: [panel/README.md](panel/README.md).
+
 [![PyPI Downloads](https://static.pepy.tech/badge/voice-mode)](https://pepy.tech/project/voice-mode)
 [![PyPI Downloads](https://static.pepy.tech/badge/voice-mode/month)](https://pepy.tech/project/voice-mode)
 [![PyPI Downloads](https://static.pepy.tech/badge/voice-mode/week)](https://pepy.tech/project/voice-mode)
