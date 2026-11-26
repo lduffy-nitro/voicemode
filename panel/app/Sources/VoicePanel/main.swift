@@ -11,10 +11,9 @@ final class FloatingPanel: NSPanel {
     var closeButtonClicked = false
 
     override func cancelOperation(_ sender: Any?) {}   // NSPanel closes on Esc by default
-    override func performClose(_ sender: Any?) {
-        guard closeButtonClicked else { return }
-        super.performClose(sender)
-    }
+    // performClose works by clicking the close button, whose action ends up here, so it must never
+    // call super (that recursed until the stack overflowed). The close button calls close() directly.
+    override func performClose(_ sender: Any?) {}
     override func close() {
         guard closeButtonClicked else { return }
         super.close()
@@ -105,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func closeButtonClicked() {
         panel.closeButtonClicked = true
-        panel.performClose(nil)
+        panel.close()
     }
 
     func toggleVisible() { panel.isVisible ? panel.orderOut(nil) : show() }
