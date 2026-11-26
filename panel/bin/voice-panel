@@ -32,8 +32,12 @@ fi
 
 # VoiceMode (this repo) provides the ears and mouth: python -m voice_mode.listen / voice_mode.mouth
 VM_ROOT="$(cd "$ROOT/.." && pwd)"
-VM_PY="$VM_ROOT/.venv/bin/python"
-[ -x "$VM_PY" ] || { echo "VoiceMode venv missing — run: (cd $VM_ROOT && uv sync)"; exit 1; }
+# Prefer the `uv tool install -e` of this repo (the same install the MCP server uses), else the dev venv.
+VM_PY="$(uv tool dir 2>/dev/null)/voice-mode/bin/python"
+if ! { [ -x "$VM_PY" ] && [ "$("$VM_PY" -c 'import voice_mode,os;print(os.path.dirname(os.path.dirname(voice_mode.__file__)))' 2>/dev/null)" = "$VM_ROOT" ]; }; then
+  VM_PY="$VM_ROOT/.venv/bin/python"
+fi
+[ -x "$VM_PY" ] || { echo "VoiceMode not installed from $VM_ROOT — run: uv tool install -e $VM_ROOT"; exit 1; }
 [ -d "$ROOT/brain/node_modules" ] || { echo "Brain deps missing — run: (cd $ROOT/brain && npm install)"; exit 1; }
 curl -s -m 2 -o /dev/null http://127.0.0.1:2022/ || echo "warning: Whisper (port 2022) isn't answering — start it with: voicemode service start whisper"
 curl -s -m 2 -o /dev/null http://127.0.0.1:8880/v1/audio/voices || echo "warning: Kokoro (port 8880) isn't answering — start it with: voicemode service start kokoro"
