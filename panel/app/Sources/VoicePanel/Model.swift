@@ -27,7 +27,7 @@ struct LaunchConfig {
 }
 
 struct Entry: Identifiable {
-    enum Role { case you, claude, tool, system }
+    enum Role { case you, claude, tool, permission, system }
     let id = UUID()
     let role: Role
     let text: String
@@ -79,6 +79,8 @@ final class PanelModel: ObservableObject {
     @Published var pending: PermissionAsk?
     @Published var ready = false
     @Published var draft = ""
+    @Published var compact = false          // minimised to the header bar
+    @Published var compactHeight: CGFloat = 0  // measured height of the minimised content
     @Published var permissionMode: PermissionMode {
         didSet {
             guard permissionMode != oldValue else { return }
@@ -223,7 +225,7 @@ final class PanelModel: ObservableObject {
     func answer(_ ask: PermissionAsk, allow: Bool) {
         brain.send(["type": "permission", "id": ask.id, "allow": allow])
         if pending?.id == ask.id { pending = nil }
-        add(.system, "\(allow ? "Allowed" : "Denied") \(ask.tool)")
+        add(.permission, "\(allow ? "Allowed" : "Denied") \(ask.tool)")
     }
 
     /// Stop reading aloud (current sentence and anything queued) but let the work carry on.

@@ -46,4 +46,4 @@ open -n "$APP" --args \
   --session "$SESSION" --transcript "$TRANSCRIPT" --cwd "$CWD" \
   --node "$(command -v node)" --brain "$ROOT/brain/brain.mjs" \
   --claude "$(command -v claude)" --path "$PATH" --voicemode-python "$VM_PY"
-echo "Voice panel opened for session ${SESSION:0:8} ($(basename "$CWD")). ⌃⌥Space mic · ⌃⌥V show/hide · ⌃⌥, stop reading · ⌃⌥. stop+interrupt."
+echo "Voice panel opened for session ${SESSION:0:8} ($(basename "$CWD")). ⌃⌥Space mic · ⌃⌥M minimise · ⌃⌥V show/hide · ⌃⌥, stop reading · ⌃⌥. stop+interrupt."
