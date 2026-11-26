@@ -45,14 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.title = "Claude Voice"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        // Not movable by background: that turned text drags into window drags. The header is the drag handle.
+        panel.isMovableByWindowBackground = false
         // Solid dark window: no translucency, so what's behind never blurs through.
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.isOpaque = true
         panel.backgroundColor = NSColor(srgbRed: 0.11, green: 0.11, blue: 0.12, alpha: 1)
         panel.level = .floating
         panel.hidesOnDeactivate = false
-        panel.becomesKeyOnlyIfNeeded = true
+        // Take keyboard focus on any click, so ⌘C copies the panel's selection rather than going to the terminal.
+        panel.becomesKeyOnlyIfNeeded = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: PanelView(model: model))
         if let closeButton = panel.standardWindowButton(.closeButton) {
@@ -155,8 +157,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// No menu bar is shown (accessory app), but its key equivalents are what make ⌘C / ⌘V / ⌘X /
+/// ⌘A / ⌘Z work in the panel. Deliberately no Close or Quit: only the close button closes it.
+func editMenu() -> NSMenu {
+    let main = NSMenu()
+    let appItem = NSMenuItem()
+    appItem.submenu = NSMenu(title: "VoicePanel")
+    main.addItem(appItem)
+    let editItem = NSMenuItem()
+    let edit = NSMenu(title: "Edit")
+    editItem.submenu = edit
+    main.addItem(editItem)
+    edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+    edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        .keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+    return main
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
+app.mainMenu = editMenu()
 app.run()
