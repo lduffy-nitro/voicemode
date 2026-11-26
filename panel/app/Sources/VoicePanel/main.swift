@@ -5,6 +5,20 @@ import SwiftUI
 
 final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// Only the window's close button sets this. Closing quits the app, so nothing else
+    /// (Esc, ⌘W, ⌘., stray close() calls) may close the panel.
+    var closeButtonClicked = false
+
+    override func cancelOperation(_ sender: Any?) {}   // NSPanel closes on Esc by default
+    override func performClose(_ sender: Any?) {
+        guard closeButtonClicked else { return }
+        super.performClose(sender)
+    }
+    override func close() {
+        guard closeButtonClicked else { return }
+        super.close()
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -41,6 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.becomesKeyOnlyIfNeeded = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: PanelView(model: model))
+        if let closeButton = panel.standardWindowButton(.closeButton) {
+            closeButton.target = self
+            closeButton.action = #selector(closeButtonClicked)
+        }
         panel.setFrameAutosaveName("VoicePanel")
         if !panel.setFrameUsingName("VoicePanel"), let screen = NSScreen.main {
             let f = screen.visibleFrame
@@ -81,6 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? "\(getpid())".write(toFile: pidFile!, atomically: true, encoding: .utf8)
 
         model.start()
+    }
+
+    @objc private func closeButtonClicked() {
+        panel.closeButtonClicked = true
+        panel.performClose(nil)
     }
 
     func toggleVisible() { panel.isVisible ? panel.orderOut(nil) : show() }
