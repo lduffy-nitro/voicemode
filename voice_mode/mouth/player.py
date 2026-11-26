@@ -30,6 +30,7 @@ for). A stop never touches an utterance requested after it.
 from __future__ import annotations
 
 import fcntl
+import itertools
 import json
 import os
 import sys
@@ -47,6 +48,17 @@ from . import maillog
 from . import output as _output
 from . import hold as _hold
 from .paths import mouth_dir
+
+
+_CONNECT_RETRY_S = 0.5
+
+
+def _connect_wait_s() -> float:
+    """How long a line waits for a TTS server that is refusing connections (Kokoro restarting)."""
+    try:
+        return max(0.0, float(os.environ.get("VOICEMODE_MOUTH_CONNECT_WAIT", "60")))
+    except ValueError:
+        return 60.0
 
 
 _SYNTH_KEYS = ("text", "voice", "speed", "backend", "file", "start", "end")
@@ -188,7 +200,9 @@ class Synth:
     def _run(self) -> None:
         gen = None
         try:
-            gen = self.backend.stream(self.item["text"], self.voice, self.item.get("speed"))
+            gen = self._open_stream()
+            if gen is None:  # cancelled while waiting for the server
+                return
             for block in gen:
                 if self._cancel.is_set():
                     break
@@ -216,6 +230,34 @@ class Synth:
                 self._on_done(self)
             except Exception:  # noqa: BLE001
                 pass
+
+    def _open_stream(self):
+        """Start the backend's stream, waiting out a TTS server that is refusing connections.
+
+        Kokoro restarts itself every VOICEMODE_KOKORO_MAX_REQUESTS requests (a
+        memory-leak workaround) and is unreachable for ~30 s while it does; a
+        line asked for then was dropped with ``reason=error``. Retry until the
+        first block arrives, for up to VOICEMODE_MOUTH_CONNECT_WAIT seconds
+        (default 60, 0 = no wait). Only a refused or failed connection is
+        retried, never an HTTP error, and never once audio has arrived.
+        """
+        import httpx
+
+        deadline = time.monotonic() + _connect_wait_s()
+        while True:
+            gen = self.backend.stream(self.item["text"], self.voice, self.item.get("speed"))
+            try:
+                first = next(gen)
+            except StopIteration:
+                return iter(())
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                gen.close()
+                if time.monotonic() >= deadline:
+                    raise
+                if self._cancel.wait(_CONNECT_RETRY_S):
+                    return None
+                continue
+            return itertools.chain([first], gen)
 
     @property
     def gen_s(self) -> Optional[float]:

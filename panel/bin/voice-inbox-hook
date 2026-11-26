@@ -1,0 +1,20 @@
+#!/bin/bash
+# Claude Code hook: deliver messages the voice panel queued for this session.
+# Wired to PostToolUse, Stop and UserPromptSubmit.
+INBOX_DIR="$HOME/.voice-panel/inbox"
+compgen -G "$INBOX_DIR/*.jsonl" >/dev/null || exit 0     # fast path: nothing queued anywhere
+INPUT="$(cat)"
+SID="$(jq -r '.session_id // empty' <<<"$INPUT")"
+EVENT="$(jq -r '.hook_event_name // empty' <<<"$INPUT")"
+F="$INBOX_DIR/$SID.jsonl"
+[ -n "$SID" ] && [ -s "$F" ] || exit 0
+TAKE="$F.$$"
+mv "$F" "$TAKE" 2>/dev/null || exit 0
+MSG="$(jq -rs '"The user, via their voice panel, asks this session to:\n" + (map("- " + .message) | join("\n"))' "$TAKE")"
+rm -f "$TAKE"
+case "$EVENT" in
+  Stop)             jq -n --arg r "$MSG" '{decision:"block", reason:$r}' ;;
+  PostToolUse|UserPromptSubmit)
+                    jq -n --arg e "$EVENT" --arg c "$MSG" '{hookSpecificOutput:{hookEventName:$e, additionalContext:$c}}' ;;
+esac
+exit 0
