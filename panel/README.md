@@ -38,9 +38,9 @@ panel/build.sh                           # → panel/build/VoicePanel.app (ad-ho
 ```markdown
 ---
 description: Open the floating voice panel (forked from this session)
-allowed-tools: Bash(~/code/voicemode/panel/bin/voice-panel:*)
+allowed-tools: Bash(~/src/voicemode/panel/bin/voice-panel:*)
 ---
-!`~/code/voicemode/panel/bin/voice-panel ${CLAUDE_SESSION_ID}`
+!`~/src/voicemode/panel/bin/voice-panel ${CLAUDE_SESSION_ID}`
 
 Reply with one short line relaying the launcher output above. Do not do anything else.
 ```
