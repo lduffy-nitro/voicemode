@@ -70,6 +70,16 @@ enum TranscriptItem: Identifiable {
     }
 }
 
+/// Drags the window from wherever it sits (the header). The window itself isn't movable by its
+/// background, because then dragging across message text moved the panel instead of selecting.
+struct WindowDragArea: NSViewRepresentable {
+    final class DragView: NSView {
+        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
+    }
+    func makeNSView(context: Context) -> NSView { DragView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
 private struct CompactHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
@@ -182,6 +192,7 @@ struct PanelView: View {
             .overlay(Capsule().stroke(Theme.cardStroke))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(WindowDragArea())   // drag the panel by its header; text elsewhere stays selectable
     }
 
     private var modeMenu: some View {
@@ -291,6 +302,7 @@ struct PanelView: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(e.role == .tool ? .secondary : .tertiary)
                             .lineLimit(4).textSelection(.enabled)
+                            .contextMenu { copyMenu(e.text) }
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
@@ -311,6 +323,7 @@ struct PanelView: View {
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .background(Theme.accent.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .textSelection(.enabled)
+                    .contextMenu { copyMenu(e.text) }
             }
         case .claude:
             Text(e.text).font(.system(size: 12)).lineSpacing(2)
@@ -319,6 +332,7 @@ struct PanelView: View {
                 .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.cardStroke))
                 .textSelection(.enabled)
+                .contextMenu { copyMenu(e.text) }
         case .tool:
             toolGroup([e])
         case .system, .permission:
@@ -326,6 +340,29 @@ struct PanelView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    // MARK: copy
+
+    @ViewBuilder private func copyMenu(_ text: String) -> some View {
+        Button("Copy") { copyToClipboard(text) }
+        Button("Copy conversation") { copyToClipboard(conversationText) }
+    }
+
+    /// The conversation as plain text (tool and system lines left out).
+    private var conversationText: String {
+        model.entries.compactMap { e -> String? in
+            switch e.role {
+            case .you: return "You: " + e.text
+            case .claude: return "Claude: " + e.text
+            default: return nil
+            }
+        }.joined(separator: "\n\n")
+    }
+
+    private func copyToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     // MARK: permission + input

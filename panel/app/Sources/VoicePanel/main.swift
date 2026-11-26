@@ -11,11 +11,11 @@ final class FloatingPanel: NSPanel {
     var closeButtonClicked = false
 
     override func cancelOperation(_ sender: Any?) {}   // NSPanel closes on Esc by default
-    override func performClose(_ sender: Any?) {
-        guard closeButtonClicked else { return }
-        super.performClose(sender)
-    }
+    // performClose works by clicking the close button, whose action ends up here, so it must never
+    // call super (that recursed until the stack overflowed). The close button calls close() directly.
+    override func performClose(_ sender: Any?) {}
     override func close() {
+        PanelLog.write("window close() requested (close button: \(closeButtonClicked))")
         guard closeButtonClicked else { return }
         super.close()
     }
@@ -36,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
+        PanelLog.open(session: config.session)
+        PanelLog.write("=== launch pid \(getpid()) session \(config.session) cwd \(config.cwd)")
         model = PanelModel(config: config)
 
         panel = FloatingPanel(
@@ -45,14 +47,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.title = "Claude Voice"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        // Not movable by background: that turned text drags into window drags. The header is the drag handle.
+        panel.isMovableByWindowBackground = false
         // Solid dark window: no translucency, so what's behind never blurs through.
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.isOpaque = true
         panel.backgroundColor = NSColor(srgbRed: 0.11, green: 0.11, blue: 0.12, alpha: 1)
         panel.level = .floating
         panel.hidesOnDeactivate = false
-        panel.becomesKeyOnlyIfNeeded = true
+        // Take keyboard focus on any click, so ⌘C copies the panel's selection rather than going to the terminal.
+        panel.becomesKeyOnlyIfNeeded = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: PanelView(model: model))
         if let closeButton = panel.standardWindowButton(.closeButton) {
@@ -103,7 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func closeButtonClicked() {
         panel.closeButtonClicked = true
-        panel.performClose(nil)
+        panel.close()
+        NSApp.terminate(nil)   // the close button is the only way out
     }
 
     func toggleVisible() { panel.isVisible ? panel.orderOut(nil) : show() }
@@ -147,16 +152,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.setFrame(f, display: true, animate: false)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    // Never quit because AppKit thinks the last window closed: it decided that 0.3 s after launch
+    // (some transient window closing) while the panel was still on screen. The close button quits.
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ note: Notification) {
+        PanelLog.writeNow("=== terminating. Call stack:\n" + Thread.callStackSymbols.prefix(25).joined(separator: "\n"))
         model?.shutdown()
         if let pidFile { try? FileManager.default.removeItem(atPath: pidFile) }
     }
+}
+
+/// No menu bar is shown (accessory app), but its key equivalents are what make ⌘C / ⌘V / ⌘X /
+/// ⌘A / ⌘Z work in the panel. Deliberately no Close or Quit: only the close button closes it.
+func editMenu() -> NSMenu {
+    let main = NSMenu()
+    let appItem = NSMenuItem()
+    appItem.submenu = NSMenu(title: "VoicePanel")
+    main.addItem(appItem)
+    let editItem = NSMenuItem()
+    let edit = NSMenu(title: "Edit")
+    editItem.submenu = edit
+    main.addItem(editItem)
+    edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+    edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        .keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+    return main
 }
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
+app.mainMenu = editMenu()
 app.run()
