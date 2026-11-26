@@ -1,0 +1,45 @@
+#!/bin/bash
+# Open the floating voice panel for a Claude Code session.
+#   voice-panel [session-id]        (defaults to the newest session in $PWD)
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APP="$ROOT/build/VoicePanel.app"
+[ -d "$APP" ] || { echo "VoicePanel.app not built — run $ROOT/build.sh"; exit 1; }
+
+SESSION="${1:-}"
+case "$SESSION" in *'$'*|*'{'*) SESSION="";; esac   # unsubstituted placeholder
+CWD="$PWD"
+PROJ="$HOME/.claude/projects/$(printf '%s' "$CWD" | sed 's#[^A-Za-z0-9]#-#g')"
+
+if [ -n "$SESSION" ]; then
+  TRANSCRIPT="$(ls "$HOME"/.claude/projects/*/"$SESSION".jsonl 2>/dev/null | head -1 || true)"
+else
+  TRANSCRIPT="$(ls -t "$PROJ"/*.jsonl 2>/dev/null | head -1 || true)"
+  SESSION="$(basename "${TRANSCRIPT:-x}" .jsonl)"
+fi
+[ -n "${TRANSCRIPT:-}" ] && [ -f "$TRANSCRIPT" ] || { echo "Couldn't find the session transcript (looked in $PROJ)"; exit 1; }
+# Use the session's own working directory (its latest recorded cwd).
+SCWD="$(tail -n 200 "$TRANSCRIPT" | jq -r 'select(.cwd) | .cwd' 2>/dev/null | tail -1)"
+[ -n "$SCWD" ] && [ -d "$SCWD" ] && CWD="$SCWD"
+
+# Already open for this session? Bring it back instead of starting another.
+PIDFILE="$HOME/.voice-panel/run/$SESSION.pid"
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  kill -USR1 "$(cat "$PIDFILE")"
+  echo "Voice panel already open for session ${SESSION:0:8} — brought it to the front."
+  exit 0
+fi
+
+# VoiceMode (this repo) provides the ears and mouth: python -m voice_mode.listen / voice_mode.mouth
+VM_ROOT="$(cd "$ROOT/.." && pwd)"
+VM_PY="$VM_ROOT/.venv/bin/python"
+[ -x "$VM_PY" ] || { echo "VoiceMode venv missing — run: (cd $VM_ROOT && uv sync)"; exit 1; }
+[ -d "$ROOT/brain/node_modules" ] || { echo "Brain deps missing — run: (cd $ROOT/brain && npm install)"; exit 1; }
+curl -s -m 2 -o /dev/null http://127.0.0.1:2022/ || echo "warning: Whisper (port 2022) isn't answering — start it with: voicemode service start whisper"
+curl -s -m 2 -o /dev/null http://127.0.0.1:8880/v1/audio/voices || echo "warning: Kokoro (port 8880) isn't answering — start it with: voicemode service start kokoro"
+
+open -n "$APP" --args \
+  --session "$SESSION" --transcript "$TRANSCRIPT" --cwd "$CWD" \
+  --node "$(command -v node)" --brain "$ROOT/brain/brain.mjs" \
+  --claude "$(command -v claude)" --path "$PATH" --voicemode-python "$VM_PY"
+echo "Voice panel opened for session ${SESSION:0:8} ($(basename "$CWD")). ⌃⌥Space mic · ⌃⌥V show/hide · ⌃⌥, stop reading · ⌃⌥. stop+interrupt."
